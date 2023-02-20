@@ -1,0 +1,76 @@
+#include "main.h"
+
+#define CHECK_FLASH 1
+#define BYTE_FROM_FLASH(addr) (*((char *)addr))
+
+int moder;
+int otyper;
+
+void check_summ(void)
+{
+	int i;
+	int cs;
+	int cs_rec;
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+//Разрешили тактирование на PORTA и PORTB
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+//Инициализировали BAT_ENABLE_PORT на выход в OD и поставили его в 0 
+	moder=BAT_ENABLE_PORT->MODER;
+
+  GPIO_InitStruct.Pin = BAT_ENABLE_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD; //OD
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BAT_ENABLE_PORT, &GPIO_InitStruct);
+	BAT_ENABLE(0);
+	moder=BAT_ENABLE_PORT->MODER;
+	otyper=BAT_ENABLE_PORT->OTYPER;
+	//	BAT_ENABLE_PORT->BSRR=(BAT_ENABLE_PIN << 16);
+//	BAT_ENABLE_PORT->MODER = 0;
+//	BAT_ENABLE_PORT->MODER |= ((BAT_ENABLE_PIN+(BAT_ENABLE_PIN*2))*(BAT_ENABLE_PIN));
+//	BAT_ENABLE_PORT->MODER |= 0x3000;
+//	BAT_ENABLE_PORT->MODER |= ((BAT_ENABLE_PIN)*(BAT_ENABLE_PIN));
+//	BAT_ENABLE_PORT->BSRR=(BAT_ENABLE_PIN << 16);
+	
+//Напрямую инициализировали LED_ERROR и LED_OK на вывод			
+	LED_ERROR_PORT->MODER = 0;
+	LED_ERROR_PORT->MODER |= ((LED_ERROR_PIN)*(LED_ERROR_PIN));
+	LED_OK_PORT->MODER    |= ((LED_OK_PIN)*(LED_OK_PIN));
+
+//Найдем контрольную сумму
+	cs = 0;
+
+	for(i=APPLICATION_ADDRESS; i<CHECKSUM_ADDRESS; i++)
+		{
+			cs=cs+BYTE_FROM_FLASH(i);
+		}
+//И сравним ее с записанной
+	cs_rec=BYTE_FROM_FLASH(CHECKSUM_ADDRESS);
+	cs_rec |= BYTE_FROM_FLASH(CHECKSUM_ADDRESS+1)<<8;
+	cs_rec |= BYTE_FROM_FLASH(CHECKSUM_ADDRESS+2)<<16;
+	cs_rec |= BYTE_FROM_FLASH(CHECKSUM_ADDRESS+3)<<24;
+
+#if CHECK_FLASH != 0
+	if( cs != cs_rec )
+		{
+
+//Моргаем и не работаем
+			while(1)
+				{
+					for(i=0; i<1000000; i++)
+						{
+							LED_ERROR_PORT->BSRR=LED_ERROR_PIN;
+							LED_OK_PORT->BSRR=(LED_OK_PIN << 16);
+						}
+
+					for(i=0; i<1000000; i++)
+						{
+							LED_ERROR_PORT->BSRR=(LED_ERROR_PIN << 16);
+							LED_OK_PORT->BSRR=LED_OK_PIN;
+						}
+				}
+		}
+#endif
+}
